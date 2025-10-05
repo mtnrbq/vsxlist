@@ -37,7 +37,7 @@ public class CsvWriterService
         });
 
         // Write header
-        csv.WriteField("Profile");
+        csv.WriteField("ProfileName");
         csv.WriteField("ExtensionID");
         csv.WriteField("DisplayName");
         csv.WriteField("Publisher");
@@ -144,9 +144,9 @@ public class CsvWriterService
     /// </summary>
     internal static void WriteFieldWithQuoting(CsvWriter csv, string? value, bool forceQuote)
     {
-        if (forceQuote && !string.IsNullOrEmpty(value))
+        if (forceQuote && value != null)
         {
-            // Escape any existing quotes and wrap in quotes
+            // Escape any existing quotes and wrap in quotes (including empty strings)
             var escapedValue = value.Replace("\"", "\"\"");
             csv.WriteField($"\"{escapedValue}\"", false); // false means don't auto-quote
         }

@@ -73,11 +73,14 @@ public class ProfileReaderService
             if (!Directory.Exists(profilesDir))
                 return profiles.AsReadOnly();
 
+            // Read profile name mappings from sync configuration
+            var profileNameMap = await ReadProfileNameMappingsAsync();
+
             var profileDirectories = Directory.GetDirectories(profilesDir);
             
             foreach (var profileDir in profileDirectories)
             {
-                var profile = await ReadProfileFromDirectoryAsync(profileDir);
+                var profile = await ReadProfileFromDirectoryAsync(profileDir, profileNameMap);
                 if (profile != null)
                 {
                     profiles.Add(profile);
@@ -93,18 +96,27 @@ public class ProfileReaderService
     }
 
     /// <summary>
+    /// Reads a profile from a specific directory (overload for testing)
+    /// </summary>
+    internal async Task<VsCodeProfile?> ReadProfileFromDirectoryAsync(string profileDir)
+    {
+        return await ReadProfileFromDirectoryAsync(profileDir, null);
+    }
+
+    /// <summary>
     /// Reads a profile from a specific directory
     /// </summary>
-    private async Task<VsCodeProfile?> ReadProfileFromDirectoryAsync(string profileDir)
+    internal async Task<VsCodeProfile?> ReadProfileFromDirectoryAsync(string profileDir, Dictionary<string, string>? profileNameMap = null)
     {
         try
         {
-            var profileName = Path.GetFileName(profileDir);
+            var profileId = Path.GetFileName(profileDir);
+            var profileName = profileNameMap?.GetValueOrDefault(profileId) ?? profileId;
             var extensionsConfigPath = VsCodePaths.GetExtensionsConfigPath(profileDir);
             
             var extensions = File.Exists(extensionsConfigPath)
                 ? await ReadExtensionsFromConfigAsync(extensionsConfigPath)
-                : await ReadExtensionsFromDirectoryAsync(VsCodePaths.GetExtensionsDirectory());
+                : new List<VsCodeExtension>();
 
             var lastModified = Directory.GetLastWriteTime(profileDir);
 
@@ -122,6 +134,58 @@ public class ProfileReaderService
             Console.WriteLine($"Warning: Could not read profile from {profileDir}: {ex.Message}");
             return null;
         }
+    }
+
+    /// <summary>
+    /// Reads profile name mappings from VS Code sync configuration
+    /// </summary>
+    private async Task<Dictionary<string, string>> ReadProfileNameMappingsAsync()
+    {
+        var mappings = new Dictionary<string, string>();
+        
+        try
+        {
+            var userDataDir = VsCodePaths.GetUserDataDirectory();
+            var syncProfilesPath = Path.Combine(userDataDir, "sync", "profiles", "lastSyncprofiles.json");
+            
+            if (!File.Exists(syncProfilesPath))
+                return mappings;
+
+            var jsonContent = await File.ReadAllTextAsync(syncProfilesPath);
+            var syncDoc = JsonDocument.Parse(jsonContent);
+            
+            if (syncDoc.RootElement.TryGetProperty("syncData", out var syncData) &&
+                syncData.TryGetProperty("content", out var content))
+            {
+                var profilesJson = content.GetString();
+                if (!string.IsNullOrEmpty(profilesJson))
+                {
+                    var profilesDoc = JsonDocument.Parse(profilesJson);
+                    if (profilesDoc.RootElement.ValueKind == JsonValueKind.Array)
+                    {
+                        foreach (var profile in profilesDoc.RootElement.EnumerateArray())
+                        {
+                            if (profile.TryGetProperty("id", out var id) &&
+                                profile.TryGetProperty("name", out var name))
+                            {
+                                var profileId = id.GetString();
+                                var profileName = name.GetString();
+                                if (!string.IsNullOrEmpty(profileId) && !string.IsNullOrEmpty(profileName))
+                                {
+                                    mappings[profileId] = profileName;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Warning: Could not read profile name mappings: {ex.Message}");
+        }
+
+        return mappings;
     }
 
     /// <summary>
@@ -163,16 +227,97 @@ public class ProfileReaderService
         try
         {
             var json = await File.ReadAllTextAsync(configPath);
-            var config = JsonSerializer.Deserialize<JsonElement>(json);
+            var extensionsArray = JsonSerializer.Deserialize<JsonElement[]>(json);
             
-            // TODO: Parse the extensions.json format and convert to VsCodeExtension objects
-            // For now, fall back to reading from directory
-            return await ReadExtensionsFromDirectoryAsync(VsCodePaths.GetExtensionsDirectory());
+            if (extensionsArray == null || extensionsArray.Length == 0)
+                return new List<VsCodeExtension>();
+
+            var extensions = new List<VsCodeExtension>();
+            
+            foreach (var extensionElement in extensionsArray)
+            {
+                try
+                {
+                    var extension = ParseExtensionFromConfig(extensionElement);
+                    if (extension != null)
+                        extensions.Add(extension);
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Warning: Could not parse extension from config: {ex.Message}");
+                }
+            }
+            
+            return extensions;
         }
         catch (Exception ex)
         {
             Console.WriteLine($"Warning: Could not read extensions config from {configPath}: {ex.Message}");
-            return await ReadExtensionsFromDirectoryAsync(VsCodePaths.GetExtensionsDirectory());
+            return new List<VsCodeExtension>();
+        }
+    }
+
+    /// <summary>
+    /// Parses a VS Code extension from the extensions.json configuration format
+    /// </summary>
+    private VsCodeExtension? ParseExtensionFromConfig(JsonElement extensionElement)
+    {
+        try
+        {
+            // VS Code extensions.json format has nested structure:
+            // {
+            //   "identifier": { "id": "publisher.extensionName" },
+            //   "metadata": { ... extension details ... }
+            // }
+            
+            if (!extensionElement.TryGetProperty("identifier", out var identifierElement) ||
+                !identifierElement.TryGetProperty("id", out var idElement))
+            {
+                return null;
+            }
+
+            var id = idElement.GetString();
+            if (string.IsNullOrEmpty(id))
+                return null;
+
+            var displayName = id;
+            var version = "unknown";
+            var description = "";
+            var publisher = "";
+            var category = "";
+            var repository = "";
+
+            // Extract metadata if available
+            if (extensionElement.TryGetProperty("metadata", out var metadataElement))
+            {
+                if (metadataElement.TryGetProperty("displayName", out var displayNameProp))
+                    displayName = displayNameProp.GetString() ?? id;
+                
+                if (metadataElement.TryGetProperty("version", out var versionProp))
+                    version = versionProp.GetString() ?? "unknown";
+                
+                if (metadataElement.TryGetProperty("description", out var descProp))
+                    description = descProp.GetString() ?? "";
+                
+                if (metadataElement.TryGetProperty("publisherDisplayName", out var publisherProp))
+                    publisher = publisherProp.GetString() ?? "";
+            }
+
+            return new VsCodeExtension
+            {
+                Id = id,
+                DisplayName = displayName,
+                Version = version,
+                Description = description,
+                Publisher = publisher,
+                Category = category,
+                Repository = repository
+            };
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Warning: Could not parse extension element: {ex.Message}");
+            return null;
         }
     }
 

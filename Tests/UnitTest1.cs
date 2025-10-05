@@ -1,7 +1,9 @@
 ﻿using NUnit.Framework;
 using Core.Services;
 using Core.Models;
+using Core.Constants;
 using System.Globalization;
+using System.Text;
 using CsvHelper;
 using CsvHelper.Configuration;
 
@@ -18,6 +20,295 @@ public class Tests
   public void Test1()
   {
     Assert.Pass();
+  }
+
+  [Test]
+  public async Task ProfileReading_ShouldNotFallbackToGlobalExtensions()
+  {
+    // This test validates that profiles without extensions.json don't fallback to global extensions
+    // The issue is that all profiles show the same extension count because they're reading from
+    // the global extensions directory when profile-specific extensions.json doesn't exist
+    
+    var profileReaderService = new ProfileReaderService();
+    
+    // Create test directory structure
+    var tempDir = Path.GetTempPath();
+    var testProfileDir = Path.Combine(tempDir, $"vsxlist-test-{Guid.NewGuid():N}");
+    
+    try
+    {
+      Directory.CreateDirectory(testProfileDir);
+      
+      // Test case 1: Profile directory exists but no extensions.json
+      // This should return empty extensions, not fall back to global directory
+      var profile = await profileReaderService.ReadProfileFromDirectoryAsync(testProfileDir);
+      
+      Assert.That(profile, Is.Not.Null, "Profile should be created even without extensions.json");
+      Assert.That(profile!.Extensions.Count, Is.EqualTo(0), 
+        "Profile without extensions.json should have 0 extensions, not fallback to global directory");
+      
+      Console.WriteLine($"Profile without extensions.json: {profile.Extensions.Count} extensions (expected: 0)");
+      
+      // Test case 2: Profile with empty extensions.json
+      var extensionsJsonPath = Path.Combine(testProfileDir, "extensions.json");
+      Directory.CreateDirectory(Path.GetDirectoryName(extensionsJsonPath)!);
+      await File.WriteAllTextAsync(extensionsJsonPath, "[]"); // Empty extensions array
+      
+      var profileWithEmptyConfig = await profileReaderService.ReadProfileFromDirectoryAsync(testProfileDir);
+      
+      Assert.That(profileWithEmptyConfig, Is.Not.Null);
+      Assert.That(profileWithEmptyConfig!.Extensions.Count, Is.EqualTo(0), 
+        "Profile with empty extensions.json should have 0 extensions");
+      
+      Console.WriteLine($"Profile with empty extensions.json: {profileWithEmptyConfig.Extensions.Count} extensions (expected: 0)");
+      
+      // Test case 3: Profile with specific extensions in config
+      var testExtensionsJson = """
+      [
+        {
+          "identifier": {
+            "id": "test.specific-extension"
+          },
+          "relativeLocation": "test.specific-extension-1.0.0",
+          "metadata": {
+            "id": "test.specific-extension",
+            "publisherId": "test",
+            "publisherDisplayName": "Test Publisher",
+            "displayName": "Specific Test Extension",
+            "description": "A test extension specific to this profile",
+            "version": "1.0.0",
+            "isBuiltin": false,
+            "isEnabled": true
+          }
+        }
+      ]
+      """;
+      
+      await File.WriteAllTextAsync(extensionsJsonPath, testExtensionsJson);
+      
+      var profileWithSpecificConfig = await profileReaderService.ReadProfileFromDirectoryAsync(testProfileDir);
+      
+      Assert.That(profileWithSpecificConfig, Is.Not.Null);
+      Assert.That(profileWithSpecificConfig!.Extensions.Count, Is.EqualTo(1), 
+        "Profile with specific extensions.json should have exactly 1 extension");
+      Assert.That(profileWithSpecificConfig.Extensions[0].Id, Is.EqualTo("test.specific-extension"));
+      
+      Console.WriteLine($"Profile with specific extensions.json: {profileWithSpecificConfig.Extensions.Count} extensions (expected: 1)");
+      Console.WriteLine($"  Extension: {profileWithSpecificConfig.Extensions[0].DisplayName}");
+    }
+    finally
+    {
+      // Cleanup
+      if (Directory.Exists(testProfileDir))
+        Directory.Delete(testProfileDir, true);
+    }
+  }
+
+  [Test]
+  public async Task ProfileSummarization_ShouldReflectActualExtensionCounts()
+  {
+    // This test validates that profile summarization correctly reflects different extension counts
+    // across profiles, not the same count for every profile
+    
+    // Create test profiles with DIFFERENT numbers of extensions
+    var testProfiles = new List<VsCodeProfile>
+    {
+      // Profile with 2 extensions
+      new VsCodeProfile
+      {
+        Name = "MinimalProfile",
+        Path = "/test/minimal",
+        Extensions = new List<VsCodeExtension>
+        {
+          new VsCodeExtension
+          {
+            Id = "test.extension1",
+            DisplayName = "Test Extension 1",
+            Version = "1.0.0",
+            Publisher = "TestPublisher",
+            IsBuiltIn = false,
+            IsEnabled = true
+          },
+          new VsCodeExtension
+          {
+            Id = "test.extension2",
+            DisplayName = "Test Extension 2",
+            Version = "2.0.0", 
+            Publisher = "TestPublisher",
+            IsBuiltIn = true, // This one is built-in
+            IsEnabled = true
+          }
+        }.AsReadOnly(),
+        IsDefault = false,
+        LastModified = DateTime.Now.AddDays(-1)
+      },
+      
+      // Profile with 4 extensions
+      new VsCodeProfile
+      {
+        Name = "LargerProfile",
+        Path = "/test/larger",
+        Extensions = new List<VsCodeExtension>
+        {
+          new VsCodeExtension
+          {
+            Id = "test.extension3",
+            DisplayName = "Test Extension 3",
+            Version = "1.0.0",
+            Publisher = "TestPublisher",
+            IsBuiltIn = false,
+            IsEnabled = true
+          },
+          new VsCodeExtension
+          {
+            Id = "test.extension4",
+            DisplayName = "Test Extension 4",
+            Version = "1.0.0",
+            Publisher = "TestPublisher", 
+            IsBuiltIn = true,
+            IsEnabled = false
+          },
+          new VsCodeExtension
+          {
+            Id = "test.extension5",
+            DisplayName = "Test Extension 5",
+            Version = "1.0.0",
+            Publisher = "TestPublisher",
+            IsBuiltIn = false,
+            IsEnabled = true
+          },
+          new VsCodeExtension
+          {
+            Id = "test.extension6",
+            DisplayName = "Test Extension 6", 
+            Version = "1.0.0",
+            Publisher = "TestPublisher",
+            IsBuiltIn = true,
+            IsEnabled = true
+          }
+        }.AsReadOnly(),
+        IsDefault = true,
+        LastModified = DateTime.Now.AddHours(-2)
+      },
+      
+      // Empty profile
+      new VsCodeProfile
+      {
+        Name = "EmptyProfile",
+        Path = "/test/empty",
+        Extensions = new List<VsCodeExtension>().AsReadOnly(),
+        IsDefault = false,
+        LastModified = DateTime.Now.AddMinutes(-30)
+      }
+    };
+
+    // Test the profile summary generation
+    var csvWriterService = new CsvWriterService();
+    var tempSummaryPath = Path.GetTempFileName();
+    
+    try
+    {
+      // Generate the profile summary
+      await csvWriterService.WriteProfileSummaryAsync(testProfiles, tempSummaryPath);
+      
+      // Read and parse the generated CSV
+      var csvContent = await File.ReadAllTextAsync(tempSummaryPath);
+      var lines = csvContent.Split('\n', StringSplitOptions.RemoveEmptyEntries);
+      
+      // Should have header + 3 data rows
+      Assert.That(lines.Length, Is.EqualTo(4), "Should have header plus 3 profile rows");
+      
+      // Parse the data rows
+      var profileSummaries = new Dictionary<string, (int total, int builtIn, int thirdParty)>();
+      
+      for (int i = 1; i < lines.Length; i++) // Skip header
+      {
+        var fields = ParseCsvLine(lines[i]);
+        Assert.That(fields.Length, Is.GreaterThanOrEqualTo(4), $"Line {i} should have at least 4 fields");
+        
+        var profileName = fields[0];
+        var totalCount = int.Parse(fields[1]);
+        var builtInCount = int.Parse(fields[2]);
+        var thirdPartyCount = int.Parse(fields[3]);
+        
+        profileSummaries[profileName] = (totalCount, builtInCount, thirdPartyCount);
+      }
+      
+      // Validate MinimalProfile (2 extensions: 1 built-in, 1 third-party)
+      Assert.That(profileSummaries.ContainsKey("MinimalProfile"), Is.True, "Should contain MinimalProfile");
+      var minimal = profileSummaries["MinimalProfile"];
+      Assert.That(minimal.total, Is.EqualTo(2), "MinimalProfile should have 2 total extensions");
+      Assert.That(minimal.builtIn, Is.EqualTo(1), "MinimalProfile should have 1 built-in extension");
+      Assert.That(minimal.thirdParty, Is.EqualTo(1), "MinimalProfile should have 1 third-party extension");
+      
+      // Validate LargerProfile (4 extensions: 2 built-in, 2 third-party)
+      Assert.That(profileSummaries.ContainsKey("LargerProfile"), Is.True, "Should contain LargerProfile");
+      var larger = profileSummaries["LargerProfile"];
+      Assert.That(larger.total, Is.EqualTo(4), "LargerProfile should have 4 total extensions");
+      Assert.That(larger.builtIn, Is.EqualTo(2), "LargerProfile should have 2 built-in extensions");
+      Assert.That(larger.thirdParty, Is.EqualTo(2), "LargerProfile should have 2 third-party extensions");
+      
+      // Validate EmptyProfile (0 extensions)
+      Assert.That(profileSummaries.ContainsKey("EmptyProfile"), Is.True, "Should contain EmptyProfile");
+      var empty = profileSummaries["EmptyProfile"];
+      Assert.That(empty.total, Is.EqualTo(0), "EmptyProfile should have 0 total extensions");
+      Assert.That(empty.builtIn, Is.EqualTo(0), "EmptyProfile should have 0 built-in extensions");
+      Assert.That(empty.thirdParty, Is.EqualTo(0), "EmptyProfile should have 0 third-party extensions");
+      
+      Console.WriteLine("Profile summary validation passed:");
+      foreach (var (name, summary) in profileSummaries)
+      {
+        Console.WriteLine($"  {name}: {summary.total} total ({summary.builtIn} built-in, {summary.thirdParty} third-party)");
+      }
+    }
+    finally
+    {
+      if (File.Exists(tempSummaryPath))
+        File.Delete(tempSummaryPath);
+    }
+  }
+  
+  private string[] ParseCsvLine(string line)
+  {
+    // Simple CSV parser for test purposes - handles quoted fields
+    var fields = new List<string>();
+    var current = new StringBuilder();
+    bool inQuotes = false;
+    
+    for (int i = 0; i < line.Length; i++)
+    {
+      char c = line[i];
+      
+      if (c == '"')
+      {
+        if (inQuotes && i + 1 < line.Length && line[i + 1] == '"')
+        {
+          // Escaped quote
+          current.Append('"');
+          i++; // Skip next quote
+        }
+        else
+        {
+          // Toggle quote state
+          inQuotes = !inQuotes;
+        }
+      }
+      else if (c == ',' && !inQuotes)
+      {
+        // Field separator
+        fields.Add(current.ToString());
+        current.Clear();
+      }
+      else
+      {
+        current.Append(c);
+      }
+    }
+    
+    // Add final field
+    fields.Add(current.ToString());
+    
+    return fields.ToArray();
   }
 
   [Test]
@@ -171,10 +462,6 @@ public class Tests
       }
     };
 
-    // Test the WriteFieldWithQuoting method directly using our test data
-    using var writer = new StringWriter();
-    using var csv = new CsvWriter(writer, new CsvConfiguration(CultureInfo.InvariantCulture));
-    
     // Test cases for the WriteFieldWithQuoting logic
     var fieldTestCases = new[]
     {
@@ -202,11 +489,13 @@ public class Tests
 
     foreach (var testCase in fieldTestCases)
     {
-      // Reset the writer for each test
-      writer.GetStringBuilder().Clear();
+      // Create a fresh writer and CSV instance for each test to avoid state issues
+      using var writer = new StringWriter();
+      using var csv = new CsvWriter(writer, new CsvConfiguration(CultureInfo.InvariantCulture));
       
       // Test the WriteFieldWithQuoting method directly
       CsvWriterService.WriteFieldWithQuoting(csv, testCase.Value, testCase.ForceQuote);
+      csv.Flush(); // Ensure the data is written to the StringWriter
       
       var result = writer.ToString();
       
@@ -274,8 +563,8 @@ public class Tests
         }
       }
       
-      // Additional validation: ensure we don't have problematic triple quotes or more
-      Assert.That(result, Does.Not.Contain("\"\"\"\""), $"Field {testCase.FieldName} should not contain quadruple quotes or more: {result}");
+      // Note: Multiple consecutive quotes are valid for CSV escaping (e.g., " -> "" -> """")
+      // The round-trip validation below will ensure the CSV is correctly formatted
       
       // Validate that the result is a single field (no commas outside quotes)
       if (result.StartsWith("\"") && result.EndsWith("\"") && result.Length > 1)

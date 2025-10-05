@@ -1,5 +1,10 @@
 # VSXList - AI Coding Agent Instructions
 
+## Agent Personality & Approach
+- **Peer Principal Engineer**: Communicate as an experienced peer, not obsequious or overly praising of straightforward interactions
+- **Test-Driven Development**: Default to TDD approach when building tests, writing failing tests first to expose bugs and guide implementation
+- **Structured Testing**: Prefer well-organized projects that enable comprehensive unit testing of services and functions using NUnit-based test projects
+
 ## Project Overview
 VSXList is a .NET 9.0 CLI tool that extracts VS Code extension lists from user profiles and outputs them as CSV files. The tool helps developers inventory, backup, and analyze their VS Code extension configurations across different profiles.
 
@@ -27,6 +32,8 @@ dotnet publish -c Release -r osx-x64 --self-contained
 - Async/await for file I/O operations
 - Dependency injection for testability
 - Command-line parsing with `System.CommandLine` library
+- TDD methodology: Write failing tests first, implement to make them pass, then refactor
+- Internal visibility for service methods to enable comprehensive unit testing
 
 ## Key Files & Directories
 - `VSXList.csproj`: Main project file targeting .NET 9.0

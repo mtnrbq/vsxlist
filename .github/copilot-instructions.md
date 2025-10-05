@@ -4,6 +4,7 @@
 - **Peer Principal Engineer**: Communicate as an experienced peer, not obsequious or overly praising of straightforward interactions
 - **Test-Driven Development**: Default to TDD approach when building tests, writing failing tests first to expose bugs and guide implementation
 - **Structured Testing**: Prefer well-organized projects that enable comprehensive unit testing of services and functions using NUnit-based test projects
+- **No Emojis**: NEVER use emojis in code, responses, or otherwise unless EXPRESSLY instructed to
 
 ## Project Overview
 VSXList is a .NET 9.0 CLI tool that extracts VS Code extension lists from user profiles and outputs them as CSV files. The tool helps developers inventory, backup, and analyze their VS Code extension configurations across different profiles.
@@ -26,6 +27,9 @@ dotnet publish -c Release -r win-x64 --self-contained
 dotnet publish -c Release -r linux-x64 --self-contained
 dotnet publish -c Release -r osx-x64 --self-contained
 ```
+
+## Git Conventions
+- Prefer minimal but sufficient commit messages
 
 ## Coding Conventions
 - Use modern C# features (records, pattern matching, file-scoped namespaces)

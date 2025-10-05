@@ -31,6 +31,9 @@ dotnet publish -c Release -r osx-x64 --self-contained
 ## Git Conventions
 - Prefer minimal but sufficient commit messages
 
+## Agent Mode Workflow
+When working in agent mode you MUST create a new branch for the work from main BEFORE starting on any change session, where a change session is a set of changes and interactions designed to effect a feature or similar. When it is indicated that we're done, e.g. 'lets button this up', or 'we're done' or similar, prepare a commit with a minimal but sufficient message, commit the change to the working branch, then make a PR to merge it to main, once it has been merged to main, offer to remove the old branch
+
 ## Coding Conventions
 - Use modern C# features (records, pattern matching, file-scoped namespaces)
 - Async/await for file I/O operations

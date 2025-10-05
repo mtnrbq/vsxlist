@@ -17,7 +17,7 @@ A .NET 9.0 CLI tool that extracts VS Code extension lists from user profiles and
 
 ### Building from Source
 ```bash
-git clone <repository-url>
+git clone https://github.com/mtnrbq/vsxlist.git
 cd vsxlist
 dotnet build -c Release
 ```
@@ -132,7 +132,11 @@ The tool is structured with clean separation of concerns:
 
 ## License
 
-[Add your license here]
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## Related Projects
+
+- **[VSXViz](https://github.com/mtnrbq/vsxviz)** - Flutter desktop application for visualizing VSXList CSV output
 
 ## Troubleshooting
 

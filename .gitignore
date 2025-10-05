@@ -371,3 +371,16 @@ FodyWeavers.xsd
 validation-test.csv
 test-*.csv
 *-test.csv
+
+# OS specific files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.temp

@@ -1,4 +1,4 @@
-﻿using VSXList.Services;
+﻿using Core.Services;
 
 namespace VSXList;
 

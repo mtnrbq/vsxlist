@@ -1,4 +1,4 @@
-namespace VSXList.Models;
+namespace Core.Models;
 
 /// <summary>
 /// Represents a VS Code extension with metadata for CSV export

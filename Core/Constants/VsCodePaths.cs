@@ -1,6 +1,6 @@
 using System.Runtime.InteropServices;
 
-namespace VSXList.Constants;
+namespace Core.Constants;
 
 /// <summary>
 /// Platform-specific paths for VS Code user data directories

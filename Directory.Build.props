@@ -1,0 +1,14 @@
+<Project>
+  <!-- Only apply to the root console project -->
+  <PropertyGroup Condition="'$(MSBuildProjectName)' == 'vsxlist'">
+    <!-- Disable automatic discovery of C# files in subdirectories -->
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+  </PropertyGroup>
+  
+  <!-- For the root console project, explicitly include only its own files -->
+  <ItemGroup Condition="'$(MSBuildProjectName)' == 'vsxlist'">
+    <Compile Include="*.cs" />
+    <Compile Include="Properties\**\*.cs" />
+  </ItemGroup>
+  
+</Project>

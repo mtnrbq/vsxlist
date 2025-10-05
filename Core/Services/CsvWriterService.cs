@@ -1,9 +1,9 @@
 using System.Globalization;
 using CsvHelper;
 using CsvHelper.Configuration;
-using VSXList.Models;
+using Core.Models;
 
-namespace VSXList.Services;
+namespace Core.Services;
 
 /// <summary>
 /// Service for writing VS Code extensions to CSV files

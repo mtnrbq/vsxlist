@@ -1,8 +1,8 @@
 using System.Text.Json;
-using VSXList.Constants;
-using VSXList.Models;
+using Core.Constants;
+using Core.Models;
 
-namespace VSXList.Services;
+namespace Core.Services;
 
 /// <summary>
 /// Service for discovering and reading VS Code user profiles

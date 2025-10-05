@@ -1,4 +1,4 @@
-namespace VSXList.Models;
+namespace Core.Models;
 
 /// <summary>
 /// Represents a VS Code user profile with its location and extensions

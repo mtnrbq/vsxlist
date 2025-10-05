@@ -142,7 +142,7 @@ public class CsvWriterService
     /// <summary>
     /// Writes a field with optional quoting
     /// </summary>
-    private static void WriteFieldWithQuoting(CsvWriter csv, string? value, bool forceQuote)
+    internal static void WriteFieldWithQuoting(CsvWriter csv, string? value, bool forceQuote)
     {
         if (forceQuote && !string.IsNullOrEmpty(value))
         {

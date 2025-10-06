@@ -18,4 +18,6 @@ public record VsCodeExtension
     public string? Repository { get; init; }
     public long? InstallCount { get; init; }
     public double? Rating { get; init; }
+    public string? IconPath { get; init; }
+    public string? IconUrl { get; init; }
 }

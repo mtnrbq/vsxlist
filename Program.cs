@@ -75,7 +75,9 @@ class Program
 
             if (createSummary)
             {
-                var summaryPath = Path.ChangeExtension(outputPath, null) + "-summary.csv";
+                // Generate summary file name by replacing the base name, not appending to it
+                var outputDir = Path.GetDirectoryName(outputPath) ?? Environment.CurrentDirectory;
+                var summaryPath = Path.Combine(outputDir, "vscode-extensions-summary.csv");
                 Console.WriteLine($"Creating profile summary: {summaryPath}");
                 await csvWriter.WriteProfileSummaryAsync(profiles, summaryPath);
             }

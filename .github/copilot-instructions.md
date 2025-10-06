@@ -66,9 +66,9 @@ dotnet publish -c Release -r osx-x64 --self-contained
 - Recent commits: Initial implementation → Core refactoring → Bug fixes → GitHub publication
 
 ## Agent Mode Workflow
-When working in agent mode you MUST create a new branch for the work from main BEFORE starting on any change session, where a change session is a set of changes and interactions designed to effect a feature or similar. When it is indicated that we're done, e.g. 'lets button this up', or 'we're done' or similar, prepare a commit with a succinct message, commit the change to the working branch, then make a PR to merge it to main, once it has been merged to main, offer to remove the old branch
+When working in agent mode you MUST create a new branch for the work from main BEFORE starting on any change session, where a change session is a set of changes and interactions designed to effect a feature or similar. When it is indicated that we're done, e.g. 'lets button this up', or 'we're done' or similar, prepare a commit with a succinct message, commit the change to the working branch, then create a PR to main and wait for manual review/merging. Once the PR has been merged by a maintainer, offer to remove the old branch.
 
-**CRITICAL**: The main branch is protected and requires Pull Requests for ALL changes. Direct pushes to main are NEVER allowed. Force pushes are prohibited. Always work on feature branches and create PRs for review and merging.
+**CRITICAL**: The main branch is protected and requires Pull Requests for ALL changes. Direct pushes to main are NEVER allowed. Force pushes are prohibited. Always work on feature branches and create PRs for review and merging. Agents CANNOT merge their own PRs.
 
 ## Coding Conventions
 - Use modern C# features (records, pattern matching, file-scoped namespaces)

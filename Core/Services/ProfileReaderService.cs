@@ -240,7 +240,11 @@ public class ProfileReaderService
                 {
                     var extension = ParseExtensionFromConfig(extensionElement);
                     if (extension != null)
-                        extensions.Add(extension);
+                    {
+                        // Enrich with icon data from installed extension directory
+                        var enrichedExtension = await EnrichExtensionWithIconDataAsync(extension);
+                        extensions.Add(enrichedExtension);
+                    }
                 }
                 catch (Exception ex)
                 {
@@ -322,6 +326,62 @@ public class ProfileReaderService
     }
 
     /// <summary>
+    /// Enriches an extension with icon data by looking up its installation directory
+    /// </summary>
+    private async Task<VsCodeExtension> EnrichExtensionWithIconDataAsync(VsCodeExtension extension)
+    {
+        try
+        {
+            var extensionsDir = VsCodePaths.GetExtensionsDirectory();
+            if (!Directory.Exists(extensionsDir))
+                return extension;
+
+            // Look for extension directory matching the extension ID
+            var extensionDirectories = Directory.GetDirectories(extensionsDir);
+            
+            foreach (var extDir in extensionDirectories)
+            {
+                var dirName = Path.GetFileName(extDir);
+                
+                // Extension directories are named: publisher.name-version
+                // We need to match against the extension ID (publisher.name)
+                if (dirName.StartsWith(extension.Id + "-", StringComparison.OrdinalIgnoreCase))
+                {
+                    var packageJsonPath = Path.Combine(extDir, "package.json");
+                    if (File.Exists(packageJsonPath))
+                    {
+                        var json = await File.ReadAllTextAsync(packageJsonPath);
+                        var package = JsonSerializer.Deserialize<JsonElement>(json);
+                        
+                        // Extract icon path if available
+                        if (package.TryGetProperty("icon", out var iconProperty))
+                        {
+                            var iconRelativePath = iconProperty.GetString();
+                            if (!string.IsNullOrEmpty(iconRelativePath))
+                            {
+                                var absoluteIconPath = Path.Combine(extDir, iconRelativePath);
+                                if (File.Exists(absoluteIconPath))
+                                {
+                                    return extension with { IconPath = absoluteIconPath };
+                                }
+                            }
+                        }
+                    }
+                    
+                    // Found the extension directory but no icon, return as-is
+                    break;
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Warning: Could not enrich extension {extension.Id} with icon data: {ex.Message}");
+        }
+
+        return extension;
+    }
+
+    /// <summary>
     /// Reads extension metadata from a single extension directory
     /// </summary>
     private async Task<VsCodeExtension?> ReadExtensionFromDirectoryAsync(string extensionDir)
@@ -340,12 +400,24 @@ public class ProfileReaderService
             var version = package.TryGetProperty("version", out var versionProperty) ? versionProperty.GetString() : "unknown";
             var publisher = package.TryGetProperty("publisher", out var publisherProperty) ? publisherProperty.GetString() : "unknown";
             var description = package.TryGetProperty("description", out var descProperty) ? descProperty.GetString() : null;
+            var iconRelativePath = package.TryGetProperty("icon", out var iconProperty) ? iconProperty.GetString() : null;
 
             if (string.IsNullOrEmpty(name) || string.IsNullOrEmpty(publisher))
                 return null;
 
             var extensionId = $"{publisher}.{name}";
             var installDate = Directory.GetCreationTime(extensionDir);
+            
+            // Resolve icon path if available
+            string? iconPath = null;
+            if (!string.IsNullOrEmpty(iconRelativePath))
+            {
+                var absoluteIconPath = Path.Combine(extensionDir, iconRelativePath);
+                if (File.Exists(absoluteIconPath))
+                {
+                    iconPath = absoluteIconPath;
+                }
+            }
 
             return new VsCodeExtension
             {
@@ -356,7 +428,8 @@ public class ProfileReaderService
                 Description = description,
                 IsBuiltIn = false,
                 IsEnabled = true, // Assume enabled if present
-                InstallDate = installDate
+                InstallDate = installDate,
+                IconPath = iconPath
             };
         }
         catch (Exception ex)

@@ -50,6 +50,8 @@ public class CsvWriterService
         csv.WriteField("Repository");
         csv.WriteField("InstallCount");
         csv.WriteField("Rating");
+        csv.WriteField("IconPath");
+        csv.WriteField("IconUrl");
         csv.NextRecord();
 
         // Write data
@@ -68,6 +70,8 @@ public class CsvWriterService
             csv.WriteField(extension.Repository);
             csv.WriteField(extension.InstallCount?.ToString());
             csv.WriteField(extension.Rating?.ToString("F1"));
+            csv.WriteField(extension.IconPath);
+            csv.WriteField(extension.IconUrl);
             csv.NextRecord();
         }
 

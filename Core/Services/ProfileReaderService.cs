@@ -400,6 +400,17 @@ public class ProfileReaderService
             var version = package.TryGetProperty("version", out var versionProperty) ? versionProperty.GetString() : "unknown";
             var publisher = package.TryGetProperty("publisher", out var publisherProperty) ? publisherProperty.GetString() : "unknown";
             var description = package.TryGetProperty("description", out var descProperty) ? descProperty.GetString() : null;
+
+            // Resolve NLS placeholders if needed
+            if (!string.IsNullOrEmpty(displayName) && displayName.StartsWith('%') && displayName.EndsWith('%'))
+            {
+                displayName = await ResolveNlsPlaceholderAsync(extensionDir, displayName) ?? name;
+            }
+            
+            if (!string.IsNullOrEmpty(description) && description.StartsWith('%') && description.EndsWith('%'))
+            {
+                description = await ResolveNlsPlaceholderAsync(extensionDir, description);
+            }
             var iconRelativePath = package.TryGetProperty("icon", out var iconProperty) ? iconProperty.GetString() : null;
 
             if (string.IsNullOrEmpty(name) || string.IsNullOrEmpty(publisher))
@@ -435,6 +446,58 @@ public class ProfileReaderService
         catch (Exception ex)
         {
             Console.WriteLine($"Warning: Could not read extension from {extensionDir}: {ex.Message}");
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Resolves NLS (National Language Support) placeholders like %displayName% using localization files
+    /// </summary>
+    private async Task<string?> ResolveNlsPlaceholderAsync(string extensionDir, string placeholder)
+    {
+        try
+        {
+            // Remove % characters to get the key
+            var key = placeholder.Trim('%');
+            if (string.IsNullOrEmpty(key))
+                return null;
+
+            // Try different localization files in order of preference
+            var nlsFiles = new[]
+            {
+                Path.Combine(extensionDir, "package.nls.json"),        // Default English
+                Path.Combine(extensionDir, "package.nls.en.json"),     // Explicit English
+                Path.Combine(extensionDir, "package.nls.en-US.json"),  // US English
+            };
+
+            foreach (var nlsFile in nlsFiles)
+            {
+                if (!File.Exists(nlsFile))
+                    continue;
+
+                try
+                {
+                    var nlsContent = await File.ReadAllTextAsync(nlsFile);
+                    var nlsData = JsonSerializer.Deserialize<JsonElement>(nlsContent);
+                    
+                    if (nlsData.TryGetProperty(key, out var valueElement))
+                    {
+                        var resolvedValue = valueElement.GetString();
+                        if (!string.IsNullOrEmpty(resolvedValue))
+                            return resolvedValue;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Warning: Could not parse NLS file {nlsFile}: {ex.Message}");
+                }
+            }
+
+            return null; // Could not resolve placeholder
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Warning: Error resolving NLS placeholder {placeholder}: {ex.Message}");
             return null;
         }
     }
